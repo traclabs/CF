@@ -977,9 +977,10 @@ int32 CF_CFDP_InitEngine(void)
             break;
         }
 
-        ret = CFE_SB_SubscribeLocal(CFE_SB_ValueToMsgId(CF_AppData.config_table->chan[i].mid_input),
-                                    CF_AppData.engine.channels[i].pipe,
-                                    CF_AppData.config_table->chan[i].pipe_depth_input);
+        ret = CFE_SB_SubscribeEx(CFE_SB_ValueToMsgId(CF_AppData.config_table->chan[i].mid_input),
+                                 CF_AppData.engine.channels[i].pipe,
+                                 CFE_SB_DEFAULT_QOS,
+                                 CF_AppData.config_table->chan[i].pipe_depth_input);
         if (ret != CFE_SUCCESS)
         {
             CFE_EVS_SendEvent(CF_EID_ERR_INIT_SUB, CFE_EVS_EventType_ERROR,
@@ -1624,35 +1625,38 @@ void CF_CFDP_ResetTransaction(CF_Transaction_t *t, int keep_history)
         }
     }
 
-    /* extra bookkeeping for tx direction only */
-    if (t->history->dir == CF_Direction_TX)
+    if (t->history != NULL)
     {
-        if (t->flags.tx.cmd_tx)
+        /* extra bookkeeping for tx direction only */
+        if (t->history->dir == CF_Direction_TX) // VERIFY: IS this correct handling for no history?
         {
-            CF_Assert(c->num_cmd_tx); /* sanity check */
-            --c->num_cmd_tx;
+            if (t->flags.tx.cmd_tx)
+            {
+                CF_Assert(c->num_cmd_tx); /* sanity check */
+                --c->num_cmd_tx;
+            }
+
+            if (t->p)
+            {
+                /* a playback's transaction is now done, decrement the playback counter */
+                CF_Assert(t->p->num_ts);
+                --t->p->num_ts;
+            }
         }
 
-        if (t->p)
+        /* bookkeeping for all transactions */
+        /* move transaction history to history queue */
+        if (keep_history)
         {
-            /* a playback's transaction is now done, decrement the playback counter */
-            CF_Assert(t->p->num_ts);
-            --t->p->num_ts;
+            CF_CList_InsertBack_Ex(c, CF_QueueIdx_HIST, &t->history->cl_node);
         }
-    }
+        else
+        {
+            CF_CList_InsertBack_Ex(c, CF_QueueIdx_HIST_FREE, &t->history->cl_node);
+        }
 
-    /* bookkeeping for all transactions */
-    /* move transaction history to history queue */
-    if (keep_history)
-    {
-        CF_CList_InsertBack_Ex(c, CF_QueueIdx_HIST, &t->history->cl_node);
+        CF_CList_InsertBack(&c->cs[!!CF_CFDP_IsSender(t)], &t->chunks->cl_node);
     }
-    else
-    {
-        CF_CList_InsertBack_Ex(c, CF_QueueIdx_HIST_FREE, &t->history->cl_node);
-    }
-
-    CF_CList_InsertBack(&c->cs[!!CF_CFDP_IsSender(t)], &t->chunks->cl_node);
 
     if (c->cur == t)
     {
@@ -1695,13 +1699,19 @@ void CF_CFDP_SendEotPkt(CF_Transaction_t *t)
         CFE_MSG_Init(&PktBuf->eot.tlm_header.Msg, CFE_SB_ValueToMsgId(CF_EOT_TLM_MID), sizeof(*PktBuf));
 
         PktBuf->eot.channel    = t->chan_num;
-        PktBuf->eot.direction  = t->history->dir;
-        PktBuf->eot.fnames     = t->history->fnames;
         PktBuf->eot.state      = t->state;
-        PktBuf->eot.txn_stat   = t->history->txn_stat;
-        PktBuf->eot.src_eid    = t->history->src_eid;
-        PktBuf->eot.peer_eid   = t->history->peer_eid;
-        PktBuf->eot.seq_num    = t->history->seq_num;
+
+        if (t->history != NULL)
+        {
+            // VERIFY: Added check because history=NULL, did not investigate WHY or if this is the correct handling
+            PktBuf->eot.direction  = t->history->dir;
+            PktBuf->eot.fnames     = t->history->fnames;
+            PktBuf->eot.txn_stat   = t->history->txn_stat;
+            PktBuf->eot.src_eid    = t->history->src_eid;
+            PktBuf->eot.peer_eid   = t->history->peer_eid;
+            PktBuf->eot.seq_num    = t->history->seq_num;
+        }
+        
         PktBuf->eot.fsize      = t->fsize;
         PktBuf->eot.crc_result = t->crc.result;
 

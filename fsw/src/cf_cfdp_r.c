@@ -217,7 +217,14 @@ int CF_CFDP_R_ProcessFd(CF_Transaction_t *t, CF_Logical_PduBuffer_t *ph)
         }
     }
 
-    if (ret != -1)
+    if (fd->data_len == 0)
+    {
+        CFE_EVS_SendEvent(CF_EID_ERR_CFDP_R_WRITE, CFE_EVS_EventType_ERROR,
+                          "CF R%d(%lu:%lu): Ignoring invalid request to write 0 bytes", (t->state == CF_TxnState_R2),
+                          (unsigned long)t->history->src_eid, (unsigned long)t->history->seq_num
+            );
+    }
+    else if (ret != -1)
     {
         fret = CF_WrappedWrite(t->fd, fd->data_ptr, fd->data_len);
         if (fret != fd->data_len)
