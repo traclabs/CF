@@ -26,16 +26,16 @@ configure_file(
         @ONLY
 )
 
-add_custom_target(cf-usersguide-html
-    COMMAND doxygen ${CMAKE_CURRENT_BINARY_DIR}/cf-usersguide.doxyfile
-    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-)
+# add_custom_target(cf-usersguide-html
+#     COMMAND doxygen ${CMAKE_CURRENT_BINARY_DIR}/cf-usersguide.doxyfile
+#     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+# )
 
-# This requires some of the intermediate files from the CFE doc build to be
-# in place prior to running doxygen for CF
-add_dependencies(cf-usersguide-html doc-prebuild)
+# # This requires some of the intermediate files from the CFE doc build to be
+# # in place prior to running doxygen for CF
+# add_dependencies(cf-usersguide-html doc-prebuild)
 
-add_custom_target(cf-usersguide
-    COMMAND echo "CF UsersGuide: file://${CMAKE_CURRENT_BINARY_DIR}/html/index.html"
-    DEPENDS cf-usersguide-html
-)
+# add_custom_target(cf-usersguide
+#     COMMAND echo "CF UsersGuide: file://${CMAKE_CURRENT_BINARY_DIR}/html/index.html"
+#     DEPENDS cf-usersguide-html
+# )
